@@ -28,6 +28,7 @@ class OthelloMove():
     def __eq__(self, other):
         return self.pair == other.pair and self.player == other.player
 
+
 class OthelloState():
     """Represents the state of an Othello game.
     The state includes the board (an 8x8 grid) and the current player."""
@@ -89,41 +90,44 @@ class OthelloState():
         # Turn all protomoves into OthelloMoves
         return [OthelloMove(r, c, self.current) for r, c in protomoves]
 
+    def flip(self, r, c, dr, dc, color):
+        """ starting at r, c, moving in direction dr, dc, flip all of color found"""
+        if r < 0 or c < 0 or r >= 8 or c >= 8 or self.board[r][c] != color:
+            return
+        self.board[r][c] = opposite_color(self.board[r][c])
+        self.flip(r + dr, c + dc, dr, dc, color)
+
     def apply_move(self, move):
-        """move is an othello move that is applicable. Returns a new state after
-        the move has been played. """
+        """ move is an othello move that is applicable. Returns a new state. """
 
         new_state = copy.deepcopy(self)
-        if move not in new_state.available_moves():
-            return ValueError(f"Invalid move by {move.player} at ply {new_state.current + 1}")
+        r,c = move.pair
+        assert r >= 0 and c >= 0 and r < 8 and c < 8 and move.player == self.current
+        assert self.board[r][c] == 'empty'
+        directions = []
 
-        r, c = move.pair
+        for dr in [-1, 0, 1]:
+            for dc in [-1, 0, 1]:
+                if dr==0 and dc==0:
+                    continue
+                if self.flanking(r + dr, c + dc,
+                                 dr, dc, opposite_color(self.current),
+                                 self.current):
+                    directions.append((dr, dc))
+
+        for dr, dc in directions:
+            new_state.flip(r + dr, c + dc, dr, dc, opposite_color(self.current))
+
         new_state.board[r][c] = move.player
+        new_state.current = opposite_color(self.current)
 
-        # Checks for flanking
-        change_dir = []
-        dir_list = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, -1), (-1, 1)]
-        for dr, dc in dir_list:
-            if self.flanking(r+dr, c+dc, dr, dc, opposite_color(move.player), move.player):
-                change_dir.append((dr,dc))
+        # If no legal moves, switch back to other player
+        if new_state.available_moves() == []:
+            new_state.current = move.player
 
-        # Updates aaccording to flanking directions
-        for dr, dc in change_dir:
-            r += dr
-            c += dc
-            if r < 0 or r > 7 or c < 0 or c > 7:
-                continue
-            color = new_state.board[r][c]
-            while color != move.player:
-                new_state.board[r][c] = move.player
-                r += dr
-                c += dc
-                if r < 0 or r > 7 or c < 0 or c > 7:
-                    break
-                color = new_state.board[r][c]
-
-        new_state.current = opposite_color(move.player)
+        # Increment move_number in new_state
         new_state.move_number += 1
+
         return new_state
 
     def flank_help(self, r, c, dr, dc, row_color, end_color):
